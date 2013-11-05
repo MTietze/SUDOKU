@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h> 
 
 
 // macro for processing control characters
@@ -34,6 +35,9 @@ struct
 
     // the game's board
     int board[9][9];
+    
+    // the game's initial board
+    int init_board[9][9];
 
     // the board's number
     int number;
@@ -43,14 +47,24 @@ struct
 
     // the cursor's current location between (0,0) and (8,8)
     int y, x;
+    
+    // timer visibility 
+    //int t; 
 } g;
 
 
 // prototypes
+bool check_col(int); 
+bool check_cols(int);
+bool check_row(int);
+bool check_rows(int);
+bool check_square(int, int); 
+bool check_squares(int);
 void draw_grid(void);
 void draw_borders(void);
 void draw_logo(void);
 void draw_numbers(void);
+bool game_won(void);
 void hide_banner(void);
 bool load_board(void);
 void handle_signal(int signum);
@@ -61,6 +75,8 @@ void show_banner(char *b);
 void show_cursor(void);
 void shutdown(void);
 bool startup(void);
+//void timer(int); 
+void warn(void); 
 
 
 /*
@@ -144,9 +160,20 @@ main(int argc, char *argv[])
         return 6;
     }
     redraw_all();
+  do  
+  {
+    clock_t t;
+    t = clock();
+    mvaddch(g.top + 16, g.left + 64 - 2, t);
+    sleep(1000); 
+  } 
+  while(!game_won());
+  
 
     // let the user play!
     int ch;
+    
+    int last[3] = {10};
     do
     {
         // refresh the screen
@@ -157,6 +184,9 @@ main(int argc, char *argv[])
 
         // capitalize input to simplify cases
         ch = toupper(ch);
+        
+        //g.t = 0; 
+        //timer(0); 
 
         // process user's input
         switch (ch)
@@ -186,6 +216,116 @@ main(int argc, char *argv[])
             case CTRL('l'):
                 redraw_all();
                 break;
+                
+            /*case 'T':
+                if (g.t == 1)
+                g.t = 0;
+                else 
+                g.t = 1; 
+                break;*/
+            
+            //undo last change
+            
+            case 'U': case CTRL('Z'):
+                if (last[0] != 10 && !game_won())
+                {
+                    g.board[last[0]][last[1]] = last[2]; 
+                    draw_numbers();
+                    if (check_cols(1) || check_rows(1) || check_squares(1))
+                    hide_banner();
+                    show_cursor();
+                    warn();
+                }
+               
+                break; 
+                
+                // move cursor 
+                
+            case KEY_UP: 
+                if (g.y > 0)
+                {
+                    g.y -= 1;
+                    show_cursor();
+                }
+                else
+                {
+                    g.y = 8;
+                    show_cursor();
+                }          
+                break; 
+            
+            case KEY_DOWN: 
+                if (g.y < 8)
+                {
+                    g.y += 1;
+                    show_cursor();
+                }          
+                else
+                {
+                    g.y = 0;
+                    show_cursor();
+                }    
+                break; 
+                
+            case KEY_LEFT: 
+                if (g.x > 0)
+                {
+                    g.x -= 1;
+                    show_cursor();
+                }          
+                else
+                {
+                    g.x = 8;
+                    show_cursor(); 
+                }
+                break; 
+              
+             case KEY_RIGHT: 
+                if (g.x < 8)
+                {
+                    g.x += 1;
+                    show_cursor();
+                }    
+                else
+                {
+                    g.x = 0;
+                    show_cursor(); 
+                }      
+                break; 
+                
+             //input number and check if game is won
+             case '1' ... '9':                
+                if (g.init_board[g.y][g.x] == 0)
+                {                    
+                    last[0] = g.y;
+                    last[1] = g.x;
+                    last[2] = g.board[g.y][g.x];
+                    g.board[g.y][g.x] = ch - 48; 
+                    draw_numbers(); 
+                    if (check_cols(1) || check_rows(1) || check_squares(1))
+                    hide_banner(); 
+                    show_cursor();
+                }
+                game_won();
+                warn();                                
+                
+                break; 
+                
+             //return to blank space
+             case '0': case '.': case KEY_BACKSPACE: case KEY_DC:
+                if (g.init_board[g.y][g.x] == 0)
+                {
+                    last[0] = g.y;
+                    last[1] = g.x;
+                    last[2] = g.board[g.y][g.x];
+                    g.board[g.y][g.x] = 0; 
+                    draw_numbers();
+                    if (check_cols(1) || check_rows(1) || check_squares(1))
+                    hide_banner(); 
+                    show_cursor();                   
+                }               
+                warn(); 
+                break;          
         }
 
         // log input (and board's state) if any was received this iteration
@@ -206,6 +346,158 @@ main(int argc, char *argv[])
     return 0;
 }
 
+bool 
+check_col(int x)
+{
+    //check one column for duplicates, x = x axis
+    int col[9];
+    for(int i = 0; i < 9; i++)
+    {
+         col[i] = g.board[i][x]; 
+         for(int k = 0; k < i; k++)
+         {
+             if(col[k] != 0 && col[k] == col[i])
+             {
+                 hide_banner();
+                 show_banner("You've got a column problem");
+                 return false; 
+             }
+         }
+    }
+    return true; 
+}
+
+
+
+bool
+check_cols(int option)
+{
+    // check columns for duplicates
+    int col[9];
+    for (int i = 0; i < 9; i++)
+    {
+        for(int j = 0; j < 9; j++)
+        {
+            col[j] = g.board[j][i]; 
+            for(int k = 0; k < j; k++)
+            {
+                if( option == 1 && col[k] == col[j] && col[k] != 0)                     
+                return false;                  
+                
+                else if (option != 1 && col[k] == col[j])
+                return false;             
+            }
+        }
+    }    
+    return true; 
+}
+
+bool 
+check_row(int y)
+{
+    //check one row for duplicates, y = y axis
+    int row[9];
+    for(int i = 0; i < 9; i++)
+    {
+         row[i] = g.board[y][i]; 
+         for(int k = 0; k < i; k++)
+         {
+             if(row[k] != 0 && row[k] == row[i])
+             {
+                 hide_banner(); 
+                 show_banner("You've got a row issue");
+                 return false; 
+             }
+         }
+    }
+    return true; 
+}
+
+bool 
+check_rows(int option)
+{
+    // check rows for duplicates
+    int row[9]; 
+    
+    for (int i = 0; i < 9; i++)
+    {
+        for(int j = 0; j < 9; j++)
+        {         
+            row[j] = g.board[i][j]; 
+            for(int k = 0; k < j; k++)
+            {
+                if( option == 1 && row[k] == row[j] && row[k] != 0)
+                return false;                  
+                
+                else if (option != 1 && row[k] == row[j])
+                return false; 
+            }                      
+        }
+    }
+    return true; 
+}
+
+bool 
+check_square(int y, int x)
+{
+//check one 3x3 square for duplicates, y = y axis, x = x axis
+    int square[10];
+    
+    if(x < 3)
+    x = 0;
+    if(y < 3)
+    y = 0; 
+    x = x - (x % 3);
+    y = y - (y % 3); 
+    memset(&square[0], 0, sizeof(square));
+    for (int i = y; i < y + 3; i++)
+            {
+                for(int j = x; j < x + 3; j++)
+                {                     
+                    
+                    if (g.board[i][j] != 0 && square[g.board[i][j]] == 1)
+                        return false;
+                       
+                    square[g.board[i][j]] = 1;                    
+                                        
+                }
+            }    
+    return true; 
+}
+bool 
+check_squares(int option)
+{
+    /*check 3x3 squares for duplicates a = init y axis, b = init x axis, 
+    i = y axis, j = x axis, k = position in square */
+    int square[10];
+    
+    for(int a = 0; a < 7; a = a + 3)
+    {
+        for(int b = 0; b < 7; b = b + 3)
+        {
+            //clear contents of array
+            memset(&square[0], 0, sizeof(square));
+            
+            for (int i = a; i < a + 3; i++)
+            {
+                for(int j = b; j < b + 3; j++)
+                {                     
+                    
+                    if (option == 1 && g.board[i][j] != 0 && square[g.board[i][j]] == 1)
+                        return false;
+                    
+                    if (option != 1 && ( g.board[i][j] == 0 || square[g.board[i][j]] == 1))
+                        return false; 
+                       
+                    square[g.board[i][j]] = 1;                    
+                    
+                    
+                }
+            }    
+        }
+    }
+    return true; 
+}
 
 /*
  * Draw's the game's board.
@@ -334,20 +626,54 @@ draw_logo(void)
 void
 draw_numbers(void)
 {
+    
+    
     // iterate over board's numbers
     for (int i = 0; i < 9; i++)
     {
         for (int j = 0; j < 9; j++)
-        {
+        {            
+            if (has_colors() && g.board[i][j] != 0 && g.board[i][j] == g.init_board[i][j])
+            attron(COLOR_PAIR(PAIR_INIT)); 
+            if( has_colors() && (!check_col(j) || !check_row(i) || !check_square(i,j)))
+            attron(COLOR_PAIR(PAIR_ERR));           
+            if (game_won() && has_colors())
+            attron(COLOR_PAIR(PAIR_WON));
             // determine char
             char c = (g.board[i][j] == 0) ? '.' : g.board[i][j] + '0';
             mvaddch(g.top + i + 1 + i/3, g.left + 2 + 2*(j + j/3), c);
+            if (has_colors())
+            attroff(COLOR_PAIR(PAIR_INIT)); 
             refresh();
+           
         }
     }
+   
 }
 
 
+bool
+game_won(void)
+{
+    if(check_cols(0) && check_rows(0) && check_squares(0))
+    {
+         
+        show_banner("You won, have a sandwich!"); 
+        
+        for (int i = 0; i < 9; i++)
+           { 
+               for(int j = 0; j < 9; j++)
+                  {
+                      g.init_board[j][i] = 9; 
+                  }
+           }     
+         
+         return true;
+    }
+    
+    else
+    return false; 
+}
 /*
  * Designed to handles signals (e.g., SIGWINCH).
  */
@@ -421,6 +747,18 @@ load_board(void)
 
     // w00t
     fclose(fp);
+    
+    //store a copy of initial board
+    for (int i = 0; i < 9; i++)
+    {
+        for(int j = 0; j < 9; j++)
+        {
+            g.init_board[j][i] = g.board[j][i]; 
+        }
+    }
+    
+    hide_banner(); 
+    
     return true;
 }
 
@@ -578,7 +916,10 @@ startup(void)
         if (init_pair(PAIR_BANNER, FG_BANNER, BG_BANNER) == ERR ||
             init_pair(PAIR_GRID, FG_GRID, BG_GRID) == ERR ||
             init_pair(PAIR_BORDER, FG_BORDER, BG_BORDER) == ERR ||
-            init_pair(PAIR_LOGO, FG_LOGO, BG_LOGO) == ERR)
+            init_pair(PAIR_LOGO, FG_LOGO, BG_LOGO) == ERR ||
+            init_pair(PAIR_WON, FG_WON, BG_WON) == ERR ||
+            init_pair(PAIR_INIT, FG_INIT, BG_INIT) == ERR ||
+            init_pair(PAIR_ERR, FG_ERR, BG_ERR) == ERR)
         {
             endwin();
             return false;
@@ -611,4 +952,38 @@ startup(void)
 
     // w00t
     return true;
+}
+
+/*void
+timer(int i)
+{
+                    
+            char c = i; 
+            if(g.t == 0)
+            mvaddch(g.top + 16, g.left +  50, c);
+            i++; 
+            sleep(1);
+            timer(i); 
+            
+        
+}*/
+
+void
+warn(void)
+{
+    if (!check_cols(1)) 
+    show_banner("You have a column problem"); 
+    if (!check_rows(1))
+    show_banner("You have a row issue"); 
+    if (!check_squares(1))
+    show_banner("You have a square snare"); 
+    if (!check_cols(1) && !check_rows(1))
+    show_banner("You have a column problem and a row issue");
+    if (!check_cols(1) && !check_squares(1)) 
+    show_banner("You have a column problem and a square snare");
+    if (!check_rows(1) && !check_squares(1)) 
+    show_banner("You have a row issue and a square snare");
+    if (!check_rows(1) && !check_cols(1) && !check_squares(1)) 
+    show_banner("You have a column problem, a row issue and a square snare");
+    show_cursor();
 }
