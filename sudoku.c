@@ -48,8 +48,6 @@ struct
     // the cursor's current location between (0,0) and (8,8)
     int y, x;
     
-    // timer visibility 
-    //int t; 
 } g;
 
 
@@ -75,7 +73,6 @@ void show_banner(char *b);
 void show_cursor(void);
 void shutdown(void);
 bool startup(void);
-//void timer(int); 
 void warn(void); 
 
 
@@ -160,14 +157,6 @@ main(int argc, char *argv[])
         return 6;
     }
     redraw_all();
-  do  
-  {
-    clock_t t;
-    t = clock();
-    mvaddch(g.top + 16, g.left + 64 - 2, t);
-    sleep(1000); 
-  } 
-  while(!game_won());
   
 
     // let the user play!
@@ -184,9 +173,7 @@ main(int argc, char *argv[])
 
         // capitalize input to simplify cases
         ch = toupper(ch);
-        
-        //g.t = 0; 
-        //timer(0); 
+         
 
         // process user's input
         switch (ch)
@@ -217,14 +204,7 @@ main(int argc, char *argv[])
                 redraw_all();
                 break;
                 
-            /*case 'T':
-                if (g.t == 1)
-                g.t = 0;
-                else 
-                g.t = 1; 
-                break;*/
             
-            //undo last change
             
             case 'U': case CTRL('Z'):
                 if (last[0] != 10 && !game_won())
@@ -954,19 +934,7 @@ startup(void)
     return true;
 }
 
-/*void
-timer(int i)
-{
-                    
-            char c = i; 
-            if(g.t == 0)
-            mvaddch(g.top + 16, g.left +  50, c);
-            i++; 
-            sleep(1);
-            timer(i); 
-            
-        
-}*/
+
 
 void
 warn(void)
